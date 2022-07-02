@@ -1,0 +1,12 @@
+Package: ecohabr
+Type: Package
+Title: EcoHAB data analysis
+Version: 1.0.0
+Author: Xiang Zhao
+Maintainer: Xiang Zhao <xzhao@cshl.edu>
+Description: This package is used for process raw datda from EcoHAB system.
+License: GPL
+Encoding: UTF-8
+LazyData: true
+Imports: methods
+RoxygenNote: 7.2.0
