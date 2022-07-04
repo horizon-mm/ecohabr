@@ -8,5 +8,5 @@ Description: This package is used for process raw datda from EcoHAB system.
 License: GPL
 Encoding: UTF-8
 LazyData: true
-Imports: methods
+Imports: methods, data.table, stringi
 RoxygenNote: 7.2.0

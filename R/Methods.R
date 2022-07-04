@@ -1,88 +1,10 @@
-#' Reverse a tube
-#'
-#' @param tube A string describing the directed tube.
-#'
-#' @return A reversed string representing the reversed tube.
-#'
-#'
-#' @examples reverse("ab")
-reverse <- function(tube = NA) {
-  if (is.na(tube))
-    return(NA)
-  else
-    paste(rev(unlist(strsplit(tube, split = NULL, fixed = TRUE),
-                     use.names = FALSE)), collapse = "")
-}
-
-#' Find the cage common to two different tubes
-#' @description Find where the mouse is given by the antenna records.
-#' @param from An integer describing the start antenna.
-#' @param to An integer describing the end antenna.
-#' @param length A numeric describing the interval between two records.
-#' @param config A data frame describing experimental layout.
-#' @param threshold A numeric defining if the event should be discarded.
-#'
-#' @return A character representing the cage to which both tube.1 and tube.2 connects.
-#'
-#'
-#' @examples where(2, 3, 2.6, defaultCOnfig)
-where <- function(from = NA, to = NA, length = NA, config = NA, threshold = 2) {
-  # calculate location for each event
-  # 1. If the event was at the same antenna, and the length was greater than the
-  # threshold (2s by default), the mouse is assigned to the nearest cage
-  # 2. If the event was at different antennas, and was in the same tube,
-  # the mouse is assigned to that tube
-  # 3. If the event was in two adjacent tubes connected to the same cage,
-  # the mouse is assigned to that cage
-  # 4. If the event was at different antennas but not in case 3 or 4,
-  # an "err" tag will be assigned (at least two records were missed)
-  # Note: in case that records were missed in the same tube, the mouse would
-  # appear to be in that tube for unexpected long period and may be omitted manually
-  if(is.null(config))
-    return(NA)
-  if (from == to) {
-    if (length >= threshold)
-      return(config$cage[match(from, config$antenna)])
-    else
-      return(as.character(from))
-  } else {
-    tube_from <- config$tube[match(from, config$antenna)]
-    tube_to <- config$tube[match(to, config$antenna)]
-    if (same.tube(tube_from, tube_to))
-      return(tube_from)
-    else {
-      cage_from <- config$cage[which(config$tube %in% c(tube_from, reverse(tube_from)))]
-      cage_to <- config$cage[which(config$tube %in% c(tube_to, reverse(tube_to)))]
-      cage_co <- intersect(cage_from, cage_to)
-      if (length(cage_co == 1))
-        return(cage_co)
-      else
-        return("err")
-    }
-  }
-}
-
-
-#' Check identical tubes
-#'
-#' @param tube.1 A string describing the directed tube 1.
-#' @param tube.2 A string describing the directed tube 2.
-#'
-#' @return TRUE if identical cage.
-#'
-#'
-#' @examples same.tube("ab", "ba")
-same.tube <- function(tube.1 = NA, tube.2 = NA) {
-  return(tube.1 == tube.2 |
-           tube.1 == reverse(tube.2))
-}
-
 #' Initialize class "RawData"
 #'
 #' @param RawData The new object of "RawData" class
 #' @param rawDir A string describing path to raw data or parsed data folder
 #' @param idFile A string describing path to ID list file (three columns: rfid, mid, initial location)
 #' @param simplify A logical value indicating raw data (FALSE) or parsed data (TRUE)
+#' @importFrom data.table fread
 #'
 #' @return An object of "RawData" class
 #'
@@ -101,7 +23,7 @@ setMethod("initialize", "RawData",
               i <- 1L
               if (simplify) {
                 for (file in rawFiles) {
-                  data <- data.table::fread(file, sep = "\t", header = FALSE)
+                  data <- fread(file, sep = "\t", header = FALSE)
                   time[[i]] <- paste(data[, 2], data[, 3], sep = "_")
                   rfid[[i]] <- data[, 6]
                   antenna[[i]] <- data[, 4]
@@ -110,7 +32,7 @@ setMethod("initialize", "RawData",
                 }
               } else {
                 for (file in rawFiles) {
-                  data <- data.table::fread(file, sep = "\t", header = FALSE)
+                  data <- fread(file, sep = "\t", header = FALSE)
                   time[[i]] <- data[, 1]
                   rfid[[i]] <- data[, 2]
                   antenna[[i]] <- data[, 3]
@@ -175,32 +97,19 @@ setMethod("initialize", "Timeline",
 #' @param rawDir A string describing path to raw data or parsed data folder
 #' @param idFile A string describing path to ID list file (three columns: rfid, mid, initial location)
 #' @param timeFile A string describing path to timeline file (three columns: phase name, start, end)
-#' @param simplify A logical value indicating raw data (FALSE) or parsed data (TRUE)
 #' @param config A data frame describing structure of EcoHAB
-#' @param rec.threshold Time threshold to detect same-antenna readings (in seconds)
-#' @param cage.threshold Time threshold that a mouse stays in a cage (in seconds)
-#' @param follow.threshold Time threshold that a mouse follows another (in second, only valid in "delay" mode)
-#' @param mode A string describing method to calculate following events. "in_place" counts when a mouse enters a tube before the other mouse exits in the same direction; "delay" counts when a mouse enters a tube within certain time after the other mouse.
+#' @param simplify A logical value indicating raw data (FALSE) or parsed data (TRUE)
 #'
 #' @return An object of "EcoHAB" class
 #'
 #'
 setMethod("initialize", "EcoHABData",
           function(.Object, rawDir = NULL, idFile = NULL, timeFile = NULL,
-                   simplify = FALSE, config = NULL, rec.threshold = 2,
-                   cage.threshold = 2, follow.threshold = 2,
-                   mode = c("in_place", "delay")) {
+                   config = NULL, simplify = FALSE) {
             if (is.null(config))
               .Object@config <- defaultConfig
             .Object@raw <- new("RawData", rawDir, idFile, simplify)
             .Object@timeline <- new("Timeline", timeFile)
-            .Object@events <- calcEvents(.Object@raw, .Object@config, rec.threshold)
-            .Object@incohort <- calcIncohortEvents(.Object@events,
-                                                   unique(.Object@config$cage))
-            .Object@solo <- calcSingleEvents(.Object@events,
-                                             unique(.Object@config$cage))
-            .Object@inter <- calcLeadEvents(.Object@events, unique(.Object@config$tube),
-                                            mode, follow.threshold)
             return(.Object)
           })
 
@@ -373,9 +282,9 @@ setMethod("setBinSize", "Timeline",
 #' @param RawData Raw data to be calculated
 #' @param config A data frame describing structure of EcoHAB
 #' @param threshold Time threshold to detect same-antenna readings (in seconds)
+#' @importFrom stringi stri_reverse
 #'
 #' @return An object of class "Events".
-#'
 #'
 #' @examples
 setMethod("calcEvents", "RawData",
@@ -415,7 +324,44 @@ setMethod("calcEvents", "RawData",
                 from_i <- obj@antenna[c(index[1], index)]
                 to_i <- obj@antenna[c(index, index[n])]
                 length_i <- end_i - start_i
-                loc_i <- mapply(where, from_i, to_i, length_i, MoreArgs = list(config, threshold))
+                loc_i <- mapply(function(from, to, length) {
+                                  # calculate location for each event
+                                  # 1. If the event was at the same antenna, and the length was greater than the
+                                  # threshold (2s by default), the mouse is assigned to the nearest cage
+                                  # 2. If the event was at different antennas, and was in the same tube,
+                                  # the mouse is assigned to that tube
+                                  # 3. If the event was in two adjacent tubes connected to the same cage,
+                                  # the mouse is assigned to that cage
+                                  # 4. If the event was at different antennas but not in case 3 or 4,
+                                  # an "err" tag will be assigned (at least two records were missed)
+                                  # Note: in case that records were missed in the same tube, the mouse would
+                                  # appear to be in that tube for unexpected long period and may be omitted manually
+                                  if (from == to) {
+                                    if (length >= threshold)
+                                      return(config$cage[match(from, config$antenna)])
+                                    else
+                                      return(as.character(from))
+                                  } else {
+                                    tube_from <- config$tube[match(from, config$antenna)]
+                                    tube_to <- config$tube[match(to, config$antenna)]
+                                    if (tube_from == stri_reverse(tube_to))
+                                      return(tube_from)
+                                    else {
+                                      cage_from <- config$cage[which(config$tube %in%
+                                                                       c(tube_from,
+                                                                         stri_reverse(tube_from)))]
+                                      cage_to <- config$cage[which(config$tube %in%
+                                                                     c(tube_to,
+                                                                       stri_reverse(tube_to)))]
+                                      cage_co <- intersect(cage_from, cage_to)
+                                      if (length(cage_co) == 1)
+                                        return(cage_co)
+                                      else
+                                        return("err")
+                                    }
+                                  }
+                                },
+                                from_i, to_i, length_i)
                 if (obj@simplify) {
                   # Include antenna events
                   end_i <- append(end_i, start_i[-1])
@@ -463,6 +409,56 @@ setMethod("calcEvents", "RawData",
             return(events)
           })
 
+#' Title
+#'
+#' @param EcoHABData 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+setMethod("calcEvents", "EcoHABData",
+          function(obj, rec.threshold = 2, follow.threshold = 2,
+                   mode = c("in_place", "delay")) {
+            obj@events <- calcEvents(obj@raw, obj@config, rec.threshold)
+            obj@incohort <- calcIncohortEvents(obj@events, unique(obj@config$cage))
+            obj@solo <- calcSingleEvents(obj@events, unique(obj@config$cage))
+            obj@inter <- calcLeadEvents(adjustTubeEvents(obj@events),
+                                        unique(obj@config$tube),
+                                        mode, follow.threshold)
+            return(obj)
+          })
+
+
+#' Adjust tube passing events by adding waiting time at exit
+#'
+#' @param Events The object to be calculated 
+#'
+#' @return An object of "Events" contain only adjusted tube events
+#'
+#' @examples
+setMethod("adjustTubeEvents", "Events",
+          function(obj, config = defaultConfig) {
+            # extract events of each mouse
+            index_ls <- list()
+            nid <- nrow(obj@idList)
+            for (i in 1:nid)
+              index_ls[[i]] <- which(obj@rfid == obj@idList$rfid[i])
+            length_ls <- vapply(index_ls, length, integer(1))
+            index_tube <- which(obj@loc %in% config$tube)
+            obj@end[index_tube] <- vapply(index_tube,
+                                          function(x) {
+                                            j <- match(obj@rfid[x], obj@idList$rfid)
+                                            k <- which(index_ls[[j]] == x) + 1
+                                            if (k <= length_ls[j])
+                                              if (obj@loc[index_ls[[j]][k]] == obj@to[x])
+                                                obj@end[x] <- obj@end[index_ls[[j]][k]]
+                                            return(obj@end[x])
+                                            }, numeric(1))
+            obj@length[index_tube] <- obj@end[index_tube] - obj@start[index_tube]
+            return(obj[index_tube])
+          })
+
 #' Summarize the visits and duration to each cage in given time bins
 #'
 #' @param Events The object to be calculated
@@ -503,7 +499,8 @@ setMethod("calcActivity", "Events",
                 index_jv <- index_i[obj@start[index_i] >= timeline@binStart[j]]
                 index_jv <- index_jv[obj@start[index_jv] < timeline@binEnd[j]]
                 activity@visits[ka, ] <- vapply(activity@uloc,
-                                                function(x)sum(obj@loc[index_jv] == x),
+                                                function(x)
+                                                  sum(obj@loc[index_jv] == x),
                                                 integer(1))
                 # calculate time in any locations
                 # events spanning tow or more phases will be counted to all
@@ -543,25 +540,29 @@ setMethod("filter", "Events",
           function(obj, keep.loc, keep.mid,
                    min.length = 0, max.length, verbose = TRUE) {
             keep <- 1:obj@size
-            if (missing(keep.loc))
-              keep.loc <- sort(unique(obj@loc))
-            if (missing(keep.mid))
-              keep.mid <- sort(unique(obj@mid))
-            if (missing(max.length))
+            # Step wise filter out events
+            if (!missing(keep.loc))
+              keep <- keep[obj@loc[keep] %in% keep.loc]
+            else
+              keep.loc <- unique(obj@loc)
+            if (!missing(keep.mid)) {
+              keep <- keep[obj@mid[keep] %in% keep.mid]
+              obj@idList <- subset(obj@idList, mid %in% keep.mid)
+            } else
+              keep.mid <- unique(obj@mid)
+            if (min.length > 0)
+              keep <- keep[obj@length[keep] >= min.length]
+            if (!missing(max.length))
+              keep <- keep[obj@length[keep] <= max.length]
+            else
               max.length <- max(obj@length)
             if (verbose) {
-              cat("Filtering events for animals", keep.mid, "at", keep.loc,
-                  "longer than", min.length, "and shorter than", max.length, "...\n")
+              cat("Filtering events for animals", sort(keep.mid), "at",
+                  sort(keep.loc), "longer than", min.length, "and shorter than",
+                  max.length, "...\n")
               cat(obj@size, "events in total.\n")
-            }
-            # Step wise filter out events
-            keep <- keep[obj@loc[keep] %in% keep.loc]
-            keep <- keep[obj@mid[keep] %in% keep.mid]
-            obj@idList <- subset(obj@idList, mid %in% keep.mid)
-            keep <- keep[obj@length[keep] >= min.length]
-            keep <- keep[obj@length[keep] <= max.length]
-            if (verbose)
               cat(obj@size - length(keep), "events dropped.\n")
+            }
             obj@start <- obj@start[keep]
             obj@end <- obj@end[keep]
             obj@rfid <- obj@rfid[keep]
@@ -590,7 +591,7 @@ setMethod("filter", "Events",
 #' @examples
 setMethod("calcActivity", "EcoHABData",
           function(obj, binSize = 3600, cage.threshold = 2,
-                   tube.threshold = 15, verbose = TRUE) {
+                   tube.threshold = 60, verbose = TRUE) {
             obj@cage.visit <- calcActivity(filter(obj@events,
                                                   unique(obj@config$cage),
                                                   min.length = cage.threshold,
@@ -861,6 +862,9 @@ setMethod("calcLeadEvents", "Events",
                     threshold <- obj@end[j] - obj@start[j]
                   delay <- obj@start[index_f] - obj@start[j]
                   index_fi <- index_f[delay > 0 & delay <= threshold]
+                  # follower should enter the tube after the leader and within threshold
+                  # in case of "in-place", before the leader exits the tube
+                  # in case of "delay", before certain time (default 2s) has passed
                   if (length(index_fi) > 0) {
                     start_j <- numeric(0)
                     end_j <- numeric(0)

@@ -80,6 +80,10 @@ setGeneric("setBinSize", function(obj, ...) standardGeneric("setBinSize"))
 
 setGeneric("calcEvents", function(obj, ...) standardGeneric("calcEvents"))
 
+setGeneric("filter", function(obj, ...) standardGeneric("filter"))
+
+setGeneric("adjustTubeEvents", function(obj, ...) standardGeneric("adjustTubeEvents"))
+
 setGeneric("calcActivity", function(obj, ...) standardGeneric("calcActivity"))
 
 setGeneric("calcSingleEvents", function(obj, ...) standardGeneric("calcSingleEvents"))
@@ -93,8 +97,6 @@ setGeneric("calcCoincidence", function(obj, ...) standardGeneric("calcCoincidenc
 setGeneric("adjustSociability", function(paired, single, ...) standardGeneric("adjustSociability"))
 
 setGeneric("adjustLeading", function(leading, single, ...) standardGeneric("adjustLeading"))
-
-setGeneric("filter", function(obj, ...) standardGeneric("filter"))
 
 setGeneric("getEvents", function(obj, ...) standardGeneric("getEvents"))
 
