@@ -873,7 +873,8 @@ setMethod("calcLeadEvents", "Events",
                     size_j <- 0L
                     for (k in index_fi) {
                       if (obj@from[k] == obj@from[j] &
-                          obj@to[k] == obj@to[j]) {
+                          obj@to[k] == obj@to[j] &
+                          obj@end[k] >= obj@end[j]) {
                         start_j <- append(start_j, obj@start[j])
                         end_j <- append(end_j, obj@end[k])
                         from_j <- append(from_j, obj@from[j])
