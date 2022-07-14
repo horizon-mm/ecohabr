@@ -121,3 +121,12 @@ setGeneric("getLeadingIndex", function(obj, ...) standardGeneric("getLeadingInde
 defaultConfig = data.frame(antenna = 1:8,
                            tube = c("ab", "ba", "bc", "cb", "cd", "dc", "da", "ad"),
                            cage = c("A", "B", "B", "C", "C", "D", "D", "A"))
+defaultLocMap = matrix(c(NA, "ba", "B", "B", "err", "err", "A", "A",
+                      "ab", NA, "B", "B", "err", "err", "A", "A",
+                      "B", "B", NA, "cb", "C", "C", "err", "err",
+                      "B", "B", "bc", NA, "C", "C", "err", "err",
+                      "err", "err", "C", "C", NA, "dc", "C", "C",
+                      "err", "err", "C", "C", "cd", NA, "C", "C",
+                      "A", "A", "err", "err", "D", "D", NA, "ad",
+                      "A", "A", "err", "err", "D", "D", "da", NA),
+                    nrow = 8, dimnames = list(1:8, 1:8))

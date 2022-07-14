@@ -106,8 +106,9 @@ setMethod("initialize", "Timeline",
 setMethod("initialize", "EcoHABData",
           function(.Object, rawDir = NULL, idFile = NULL, timeFile = NULL,
                    config = NULL, simplify = FALSE) {
-            if (is.null(config))
+            if (is.null(config)) {
               .Object@config <- defaultConfig
+            }
             .Object@raw <- new("RawData", rawDir, idFile, simplify)
             .Object@timeline <- new("Timeline", timeFile)
             return(.Object)
@@ -290,8 +291,11 @@ setMethod("setBinSize", "Timeline",
 setMethod("calcEvents", "RawData",
           function(obj, config = NULL, threshold = 2) {
             events <- new("Events")
-            if (is.null(config))
+            if (is.null(config)) {
               config <- defaultConfig
+              # locmap <- defaultLocMap
+            }
+            locmap <- defaultLocMap # TODO: locmap for non-default configuration
             events@threshold <- threshold
             events@size <- 0L
             if(!is.null(obj)) {
@@ -338,27 +342,30 @@ setMethod("calcEvents", "RawData",
                                   # appear to be in that tube for unexpected long period and may be omitted manually
                                   if (from == to) {
                                     if (length >= threshold)
-                                      return(config$cage[match(from, config$antenna)])
+                                      return(config$cage[from])
                                     else
                                       return(as.character(from))
                                   } else {
-                                    tube_from <- config$tube[match(from, config$antenna)]
-                                    tube_to <- config$tube[match(to, config$antenna)]
-                                    if (tube_from == stri_reverse(tube_to))
-                                      return(tube_from)
-                                    else {
-                                      cage_from <- config$cage[which(config$tube %in%
-                                                                       c(tube_from,
-                                                                         stri_reverse(tube_from)))]
-                                      cage_to <- config$cage[which(config$tube %in%
-                                                                     c(tube_to,
-                                                                       stri_reverse(tube_to)))]
-                                      cage_co <- intersect(cage_from, cage_to)
-                                      if (length(cage_co) == 1)
-                                        return(cage_co)
-                                      else
-                                        return("err")
-                                    }
+                                    return(locmap[from, to])
+                                    # if (config$cage[from] == config$cage[to])
+                                    #   return(config$cage[from])
+                                    # tube_from <- config$tube[from]
+                                    # tube_to <- config$tube[to]
+                                    # if (tube_from == stri_reverse(tube_to))
+                                    #   return(tube_from)
+                                    # else {
+                                    #   cage_from <- config$cage[which(config$tube %in%
+                                    #                                    c(tube_from,
+                                    #                                      stri_reverse(tube_from)))]
+                                    #   cage_to <- config$cage[which(config$tube %in%
+                                    #                                  c(tube_to,
+                                    #                                    stri_reverse(tube_to)))]
+                                    #   cage_co <- intersect(cage_from, cage_to)
+                                    #   if (length(cage_co) == 1)
+                                    #     return(cage_co)
+                                    #   else
+                                    #     return("err")
+                                    # }
                                   }
                                 },
                                 from_i, to_i, length_i)
@@ -376,7 +383,8 @@ setMethod("calcEvents", "RawData",
                 # Remove duplicate locations
                 j <- length(loc_i)
                 while (j > 1) {
-                  if (loc_i[j] == loc_i[j-1]) {
+                  if (loc_i[j] == loc_i[j-1] & from_i[j] == from_i[j-1] &
+                      to_i[j] == to_i[j-1]) {
                     end_i[j-1] <- end_i[j]
                     to_i[j-1] <- to_i[j]
                     loc_i[j] <- NA
