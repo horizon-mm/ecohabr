@@ -431,7 +431,7 @@ setMethod("calcEvents", "EcoHABData",
             obj@events <- calcEvents(obj@raw, obj@config, rec.threshold)
             obj@incohort <- calcIncohortEvents(obj@events, unique(obj@config$cage))
             obj@solo <- calcSingleEvents(obj@events, unique(obj@config$cage))
-            obj@inter <- calcLeadEvents(adjustTubeEvents(obj@events),
+            obj@inter <- calcFollowEvents(adjustTubeEvents(obj@events),
                                         unique(obj@config$tube),
                                         mode, follow.threshold)
             return(obj)
@@ -481,7 +481,7 @@ setMethod("adjustTubeEvents", "Events",
 setMethod("calcActivity", "Events",
           function(obj, timeline = NULL, binSize = 3600, verbose = TRUE) {
             activity <- new("Activity")
-            if(is.null(obj) | is.null(timeline))
+            if(is.null(obj) | is.null(timeline) | obj@size == 0)
               return(activity)
             timeline <- setBinSize(timeline, binSize)
             activity@uloc <- sort(unique(obj@loc))
@@ -546,25 +546,37 @@ setMethod("calcActivity", "Events",
 #' @examples
 setMethod("filter", "Events",
           function(obj, keep.loc, keep.mid,
-                   min.length = 0, max.length, verbose = TRUE) {
+                   min.length = 0, max.length = Inf, verbose = TRUE) {
+            if(obj@size == 0)
+              return(obj)
             keep <- 1:obj@size
             # Step wise filter out events
-            if (!missing(keep.loc))
+            if(!missing(keep.loc))
               keep <- keep[obj@loc[keep] %in% keep.loc]
             else
-              keep.loc <- unique(obj@loc)
-            if (!missing(keep.mid)) {
+              keep.loc <- sort(unique(obj@loc))
+            if(!missing(keep.mid)) {
               keep <- keep[obj@mid[keep] %in% keep.mid]
               obj@idList <- subset(obj@idList, mid %in% keep.mid)
             } else
-              keep.mid <- unique(obj@mid)
-            if (min.length > 0)
+              keep.mid <- sort(unique(obj@mid))
+            if(min.length < 0) {
+              cat("Negative min length. Will set to default (0).\n")
+              min.length <- 0
+            }
+            if(max.length < 0) {
+              cat("Negative max length. Will set to default (Inf).\n")
+              max.length <- Inf
+            }
+            if(max.length < min.length) {
+              cat("Max length smaller than min. Will not remove events.\n")
+              min.length <- 0
+              max.length <- Inf
+            } else {
               keep <- keep[obj@length[keep] >= min.length]
-            if (!missing(max.length))
               keep <- keep[obj@length[keep] <= max.length]
-            else
-              max.length <- max(obj@length)
-            if (verbose) {
+            }
+            if(verbose) {
               cat("Filtering events for animals", sort(keep.mid), "at",
                   sort(keep.loc), "longer than", min.length, "and shorter than",
                   max.length, "...\n")
@@ -617,11 +629,11 @@ setMethod("calcActivity", "EcoHABData",
                                                               binSize, verbose),
                                                  obj@cage.visit)
             obj@solitude <- calcActivity(obj@solo, obj@timeline, binSize, verbose)
-            obj@leading <- adjustLeading(calcActivity(filter(obj@inter,
-                                                            max.length = tube.threshold,
-                                                            verbose = verbose),
-                                                     obj@timeline, binSize, verbose),
-                                         obj@tube.visit)
+            obj@following <- adjustFollowing(calcActivity(filter(obj@inter,
+                                                                 max.length = tube.threshold,
+                                                                 verbose = verbose),
+                                                          obj@timeline, binSize, verbose),
+                                             obj@tube.visit)
             return(obj)
           })
 
@@ -730,6 +742,10 @@ setMethod("calcIncohortEvents", "Events",
             pairedEvents <- new("Events")
             pairedEvents@threshold <- 0 # TODO
             pairedEvents@size <- 0L
+            if(length(obj@idList$rfid < 2)) {
+              cat("No sufficient mice numbers. Will not calculate in-cohort events.\n")
+              return(pairedEvents)
+            }
             # calculate combination of mouse pairs
             idPair <- list(rfid = combn(obj@idList$rfid, 2),
                            mid = combn(obj@idList$mid, 2))
@@ -815,21 +831,25 @@ setMethod("calcIncohortEvents", "Events",
 #'
 #'
 #' @examples
-setMethod("calcLeadEvents", "Events",
+setMethod("calcFollowEvents", "Events",
           function(obj, uloc, mode = c("in_place", "delay"), threshold = 2) {
             if (missing(uloc))
               uloc <- sort(unique(obj@loc))
             mode <- mode[1]
-            leadEvents <- new("Events")
+            followEvents <- new("Events")
             if (mode == "delay")
-              leadEvents@threshold <- threshold
-            leadEvents@size <- 0L
+              followEvents@threshold <- threshold
+            followEvents@size <- 0L
+            if(length(obj@idList$rfid < 2)) {
+              cat("No sufficient mice numbers. Will not calculate following events.\n")
+              return(followEvents)
+            }
             # calculate permutation of mouse pairs
             rfidPair <- subset(expand.grid(obj@idList$rfid,
                                            obj@idList$rfid), Var1 != Var2)
             midPair <- subset(expand.grid(obj@idList$mid,
                                           obj@idList$mid), Var1 != Var2)
-            leadEvents@idList <- data.frame(rfid = paste(rfidPair[, 1],
+            followEvents@idList <- data.frame(rfid = paste(rfidPair[, 1],
                                                          rfidPair[, 2],
                                                          sep = "|"),
                                             mid = paste(midPair[, 1],
@@ -849,7 +869,7 @@ setMethod("calcLeadEvents", "Events",
             rfid_ls <- list()
             mid_ls <- list()
             loc_ls <- list()
-            # calculate leading events for each mouse pair
+            # calculate following events for each mouse pair
             for (i in 1:(nid ** 2 - nid)) {
               lead <- indexPair[i, 1]
               follow <- indexPair[i, 2]
@@ -900,7 +920,7 @@ setMethod("calcLeadEvents", "Events",
                     mid_i[[m]] <- rep(paste(midPair[i, 1], midPair[i, 2],
                                             sep = "|"), size_j)
                     loc_i[[m]] <- rep(obj@loc[j], size_j)
-                    leadEvents@size <- leadEvents@size + size_j
+                    followEvents@size <- followEvents@size + size_j
                   }
                 }
               }
@@ -912,17 +932,17 @@ setMethod("calcLeadEvents", "Events",
               mid_ls[[i]] <- mid_i
               loc_ls[[i]] <- loc_i
             }
-            leadEvents@start <- unlist(start_ls, use.names = FALSE)
-            ord <- order(leadEvents@start)
-            leadEvents@start <- leadEvents@start[ord]
-            leadEvents@end <- unlist(end_ls, use.names = FALSE)[ord]
-            leadEvents@from <- unlist(from_ls, use.names = FALSE)[ord]
-            leadEvents@to <- unlist(to_ls, use.names = FALSE)[ord]
-            leadEvents@rfid <- unlist(rfid_ls, use.names = FALSE)[ord]
-            leadEvents@mid <- unlist(mid_ls, use.names = FALSE)[ord]
-            leadEvents@length <- leadEvents@end - leadEvents@start
-            leadEvents@loc <- unlist(loc_ls, use.names = FALSE)[ord]
-            return(leadEvents)
+            followEvents@start <- unlist(start_ls, use.names = FALSE)
+            ord <- order(followEvents@start)
+            followEvents@start <- followEvents@start[ord]
+            followEvents@end <- unlist(end_ls, use.names = FALSE)[ord]
+            followEvents@from <- unlist(from_ls, use.names = FALSE)[ord]
+            followEvents@to <- unlist(to_ls, use.names = FALSE)[ord]
+            followEvents@rfid <- unlist(rfid_ls, use.names = FALSE)[ord]
+            followEvents@mid <- unlist(mid_ls, use.names = FALSE)[ord]
+            followEvents@length <- followEvents@end - followEvents@start
+            followEvents@loc <- unlist(loc_ls, use.names = FALSE)[ord]
+            return(followEvents)
           })
 
 #' Title
@@ -962,7 +982,8 @@ setMethod("calcCoincidence", "Activity",
 #' @examples
 setMethod("adjustSociability", "Activity",
           function(paired, single) {
-            paired@ratio <- paired@ratio - calcCoincidence(single)
+            if(length(paired@phase) > 0)
+              paired@ratio <- paired@ratio - calcCoincidence(single)
             return(paired)
           })
 
@@ -974,15 +995,17 @@ setMethod("adjustSociability", "Activity",
 #'
 #'
 #' @examples
-setMethod("adjustLeading", "Activity",
-          function(leading, single) {
-            follower <- unlist(strsplit(leading@mid,
-                                        split = "|",
-                                        fixed = T))[(1:length(leading@phase))*2]
-            index <- match(paste(leading@phase, follower),
-                           paste(single@phase, single@mid))
-            leading@ratio <- rowSums(leading@visits) / rowSums(single@visits)[index]
-            return(leading)
+setMethod("adjustFollowing", "Activity",
+          function(following, single) {
+            if(length(following@phase) > 0) {
+              follower <- unlist(strsplit(following@mid,
+                                          split = "|",
+                                          fixed = T))[(1:length(following@phase))*2]
+              index <- match(paste(following@phase, follower),
+                             paste(single@phase, single@mid))
+              following@ratio <- rowSums(following@visits) / rowSums(single@visits)[index]
+            }
+            return(following)
           })
 
 #' Title
@@ -1012,7 +1035,9 @@ setMethod("getEvents", "Events",
 #' @examples
 setMethod("getEvents", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
+            if(obj@events@size == 0)
+              index <- NULL
+            if(missing(index))
               index <- 1:obj@events@size
             getEvents(obj@events[index])
           })
@@ -1030,7 +1055,8 @@ setMethod("getVisits", "Activity",
             df <- data.frame(phase = obj@phase, binSize = obj@binSize,
                              rfid = obj@rfid, mid = obj@mid)
             df_visits <- data.frame(obj@visits)
-            colnames(df_visits) <- paste("visits", obj@uloc, sep = "_")
+            if(length(obj@uloc) > 0)
+              colnames(df_visits) <- paste("visits", obj@uloc, sep = "_")
             cbind(df, df_visits)
           })
 
@@ -1044,7 +1070,9 @@ setMethod("getVisits", "Activity",
 #' @examples
 setMethod("getTubeVisits", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
+            if(obj@events@size == 0)
+              index <- NULL
+            if(missing(index))
               index <- 1:length(obj@tube.visit@phase)
             getVisits(obj@tube.visit[index])
           })
@@ -1062,7 +1090,8 @@ setMethod("getDurations", "Activity",
             df <- data.frame(phase = obj@phase, binSize = obj@binSize,
                              rfid = obj@rfid, mid = obj@mid)
             df_time <- data.frame(obj@time)
-            colnames(df_time) <- paste("time", obj@uloc, sep = "_")
+            if(length(obj@uloc) > 0)
+              colnames(df_time) <- paste("time", obj@uloc, sep = "_")
             cbind(df, df_time)
           })
 
@@ -1076,7 +1105,9 @@ setMethod("getDurations", "Activity",
 #' @examples
 setMethod("getCageDurations", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
+            if(obj@events@size == 0)
+              index <- NULL
+            if(missing(index))
               index <- 1:length(obj@cage.visit@phase)
             getDurations(obj@cage.visit[index])
           })
@@ -1105,7 +1136,9 @@ setMethod("getRatios", "Activity",
 #' @examples
 setMethod("getSociability", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
+            if(obj@incohort@size == 0)
+              index <- NULL
+            if(missing(index))
               index <- 1:length(obj@sociability@phase)
             getRatios(obj@sociability[index])
           })
@@ -1120,7 +1153,9 @@ setMethod("getSociability", "EcoHABData",
 #' @examples
 setMethod("getSolitude", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
+            if(obj@solo@size == 0)
+              index <- NULL
+            if(missing(index))
               index <- 1:length(obj@solitude@phase)
             getRatios(obj@solitude[index])
           })
@@ -1133,24 +1168,28 @@ setMethod("getSolitude", "EcoHABData",
 #' @export
 #'
 #' @examples
-setMethod("getLeadingCounts", "EcoHABData",
+setMethod("getFollowingCounts", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
-              index <- 1:length(obj@leading@phase)
-            getVisits(obj@leading[index])
+            if(obj@inter@size == 0)
+              index <- NULL
+            if(missing(index))
+              index <- 1:length(obj@following@phase)
+            getVisits(obj@following[index])
           })
 
-#' Get the leading index
+#' Get the following index
 #'
 #' @param EcoHABData
 #'
-#' @return A data frame of leading index in all tubes.
+#' @return A data frame of following index in all tubes.
 #' @export
 #'
 #' @examples
-setMethod("getLeadingIndex", "EcoHABData",
+setMethod("getFollowingIndex", "EcoHABData",
           function(obj, index) {
-            if (missing(index))
-              index <- 1:length(obj@leading@phase)
-            getRatios(obj@leading[index])
+            if(obj@inter@size == 0)
+              index <- NULL
+            if(missing(index))
+              index <- 1:length(obj@following@phase)
+            getRatios(obj@following[index])
           })

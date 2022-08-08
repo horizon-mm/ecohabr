@@ -72,7 +72,7 @@ setClass(
     solo = "Events",
     solitude = "Activity",
     inter = "Events",
-    leading = "Activity"
+    following = "Activity"
   )
 )
 
@@ -90,13 +90,13 @@ setGeneric("calcSingleEvents", function(obj, ...) standardGeneric("calcSingleEve
 
 setGeneric("calcIncohortEvents", function(obj, ...) standardGeneric("calcIncohortEvents"))
 
-setGeneric("calcLeadEvents", function(obj, ...) standardGeneric("calcLeadEvents"))
+setGeneric("calcFollowEvents", function(obj, ...) standardGeneric("calcFollowEvents"))
 
 setGeneric("calcCoincidence", function(obj, ...) standardGeneric("calcCoincidence"))
 
 setGeneric("adjustSociability", function(paired, single, ...) standardGeneric("adjustSociability"))
 
-setGeneric("adjustLeading", function(leading, single, ...) standardGeneric("adjustLeading"))
+setGeneric("adjustFollowing", function(following, single, ...) standardGeneric("adjustFollowing"))
 
 setGeneric("getEvents", function(obj, ...) standardGeneric("getEvents"))
 
@@ -114,9 +114,9 @@ setGeneric("getSociability", function(obj, ...) standardGeneric("getSociability"
 
 setGeneric("getSolitude", function(obj, ...) standardGeneric("getSolitude"))
 
-setGeneric("getLeadingCounts", function(obj, ...) standardGeneric("getLeadingCounts"))
+setGeneric("getFollowingCounts", function(obj, ...) standardGeneric("getFollowingCounts"))
 
-setGeneric("getLeadingIndex", function(obj, ...) standardGeneric("getLeadingIndex"))
+setGeneric("getFollowingIndex", function(obj, ...) standardGeneric("getFollowingIndex"))
 
 defaultConfig = data.frame(antenna = 1:8,
                            tube = c("ab", "ba", "bc", "cb", "cd", "dc", "da", "ad"),
