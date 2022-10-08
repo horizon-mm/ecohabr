@@ -577,9 +577,10 @@ setMethod("filter", "Events",
               keep <- keep[obj@length[keep] <= max.length]
             }
             if(verbose) {
-              cat("Filtering events for animals", sort(keep.mid), "at",
-                  sort(keep.loc), "longer than", min.length, "and shorter than",
-                  max.length, "...\n")
+              cat("Filtering events for animals", sort(keep.mid), "at locations",
+                  sort(keep.loc), "longer than", min.length,
+                  "second(s) and shorter than",
+                  max.length, "second(s) ...\n")
               cat(obj@size, "events in total.\n")
               cat(obj@size - length(keep), "events dropped.\n")
             }
@@ -742,7 +743,7 @@ setMethod("calcIncohortEvents", "Events",
             pairedEvents <- new("Events")
             pairedEvents@threshold <- 0 # TODO
             pairedEvents@size <- 0L
-            if(length(obj@idList$rfid < 2)) {
+            if(length(obj@idList$rfid) < 2) {
               cat("No sufficient mice numbers. Will not calculate in-cohort events.\n")
               return(pairedEvents)
             }
@@ -840,7 +841,7 @@ setMethod("calcFollowEvents", "Events",
             if (mode == "delay")
               followEvents@threshold <- threshold
             followEvents@size <- 0L
-            if(length(obj@idList$rfid < 2)) {
+            if(length(obj@idList$rfid) < 2) {
               cat("No sufficient mice numbers. Will not calculate following events.\n")
               return(followEvents)
             }
