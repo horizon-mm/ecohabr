@@ -836,7 +836,7 @@ setMethod("calcFollowEvents", "Events",
           function(obj, uloc, mode = c("in_place", "delay"), threshold = 2) {
             if (missing(uloc))
               uloc <- sort(unique(obj@loc))
-            mode <- mode[1]
+            mode <- match.arg(mode)
             followEvents <- new("Events")
             if (mode == "delay")
               followEvents@threshold <- threshold
