@@ -291,10 +291,8 @@ setMethod("setBinSize", "Timeline",
 setMethod("calcEvents", "RawData",
           function(obj, config = NULL, threshold = 2) {
             events <- new("Events")
-            if (is.null(config)) {
+            if (is.null(config))
               config <- defaultConfig
-              # locmap <- defaultLocMap
-            }
             locmap <- defaultLocMap # TODO: locmap for non-default configuration
             events@threshold <- threshold
             events@size <- 0L
@@ -1047,7 +1045,7 @@ setMethod("getEvents", "EcoHABData",
 #'
 #' @param Activity
 #'
-#' @return A data frame of visits to each cage.
+#' @return A data frame of visits to each location.
 #'
 #'
 #' @examples
@@ -1061,11 +1059,11 @@ setMethod("getVisits", "Activity",
             cbind(df, df_visits)
           })
 
-#' Get the number of visits to each cage
+#' Get the number of visits to each tube
 #'
 #' @param EcoHABData
 #'
-#' @return A data frame of visits to each cage.
+#' @return A data frame of visits to each tube.
 #' @export
 #'
 #' @examples
@@ -1078,11 +1076,28 @@ setMethod("getTubeVisits", "EcoHABData",
             getVisits(obj@tube.visit[index])
           })
 
+#' Get the number of visits to each cage
+#'
+#' @param EcoHABData
+#'
+#' @return A data frame of visits to each cage.
+#' @export
+#'
+#' @examples
+setMethod("getCageVisits", "EcoHABData",
+          function(obj, index) {
+            if(obj@events@size == 0)
+              index <- NULL
+            if(missing(index))
+              index <- 1:length(obj@cage.visit@phase)
+            getVisits(obj@cage.visit[index])
+          })
+
 #' Title
 #'
 #' @param Activity
 #'
-#' @return A data frame of time in each cage.
+#' @return A data frame of time in each location.
 #'
 #'
 #' @examples

@@ -3,6 +3,7 @@
 exportMethods(calcActivity)
 exportMethods(calcEvents)
 exportMethods(getCageDurations)
+exportMethods(getCageVisits)
 exportMethods(getEvents)
 exportMethods(getFollowingCounts)
 exportMethods(getFollowingIndex)

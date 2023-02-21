@@ -158,6 +158,8 @@ setGeneric("getRatios", function(obj, ...) standardGeneric("getRatios"))
 
 setGeneric("getTubeVisits", function(obj, ...) standardGeneric("getTubeVisits"))
 
+setGeneric("getCageVisits", function(obj, ...) standardGeneric("getTubeVisits"))
+
 setGeneric("getCageDurations", function(obj, ...) standardGeneric("getCageDurations"))
 
 setGeneric("getSociability", function(obj, ...) standardGeneric("getSociability"))
