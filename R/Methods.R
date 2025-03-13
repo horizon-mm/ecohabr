@@ -676,9 +676,9 @@ setMethod("calcSingleEvents", "Events",
                   # select overlapped events with j
                   if (length(others_j) > 0) {
                     for (k in others_j) {
-                      # event j may change dynamically, make full comparison with k
-                      if (obj@start[k] >= end_s[j])
-                        break # no need to compare the rest
+                      # event j may change dynamically (with new start)
+#                      if (obj@start[k] >= end_s[j])
+#                        break # no need to compare the rest
                       if (obj@end[k] <= start_s[j])
                         next # no overlap, do nothing
                       if ((obj@start[k] <= start_s[j]) &
