@@ -602,6 +602,7 @@ setMethod("filter", "Events",
 #' @param binSize Size of time bins in seconds. Default is 3600
 #' @param cage.threshold Threshold of time spent in any cage. Events shorter than this value will be excluded.
 #' @param tube.threshold Threshold of time spent in any cage. Events longer than this value will be excluded.
+#' @param social.adj A logic value indicating whether to adjust sociability by chance level.
 #' @param verbose A logic value indicating whether to show extra information
 #'
 #' @return An object of class "EcoHABData".
@@ -610,7 +611,7 @@ setMethod("filter", "Events",
 #' @examples
 setMethod("calcActivity", "EcoHABData",
           function(obj, binSize = 3600, cage.threshold = 2,
-                   tube.threshold = 60, verbose = TRUE) {
+                   tube.threshold = 60, social.adj = FALSE, verbose = TRUE) {
             obj@cage.visit <- calcActivity(filter(obj@events,
                                                   unique(obj@config$cage),
                                                   min.length = cage.threshold,
@@ -621,12 +622,13 @@ setMethod("calcActivity", "EcoHABData",
                                                   max.length = tube.threshold,
                                                   verbose = verbose),
                                            obj@timeline, binSize, verbose)
-            obj@sociability <- adjustSociability(calcActivity(filter(obj@incohort,
-                                                                     min.length = cage.threshold,
-                                                                     verbose = verbose),
-                                                              obj@timeline,
-                                                              binSize, verbose),
-                                                 obj@cage.visit)
+            obj@sociability <- calcActivity(filter(obj@incohort,
+                                                   min.length = cage.threshold,
+                                                   verbose = verbose),
+                                            obj@timeline, binSize, verbose)
+            # If social.adj == TRUE then chance level will be subtracted from in-cohort sociability
+            if(social.adj)
+              obj@sociability <- adjustSociability(obj@sociability, obj@cage.visit)
             obj@solitude <- calcActivity(obj@solo, obj@timeline, binSize, verbose)
             obj@following <- adjustFollowing(calcActivity(filter(obj@inter,
                                                                  max.length = tube.threshold,
