@@ -114,11 +114,11 @@ setMethod("initialize", "EcoHABData",
             return(.Object)
           })
 
-#' Title
+#' Show summary of an object of "RawData" class
 #'
 #' @param RawData
 #'
-#' @return
+#' @return The summary of an "RawData" object
 #'
 #'
 #' @examples
@@ -132,11 +132,11 @@ setMethod("show", "RawData",
                   "      End time: ", as.character(as.POSIXct(floor(object@time[length(object@time)])+2,
                                                       origin = "1970-01-01")), "\n")
           })
-#' Title
+#' Show summary of an object of "Events" class
 #'
 #' @param Events
 #'
-#' @return
+#' @return The summary of an "Events" object
 #'
 #'
 #' @examples
@@ -150,11 +150,11 @@ setMethod("show", "Events",
                   "    End time: ", as.character(as.POSIXct(floor(object@end[object@size]),
                                                       origin = "1970-01-01")), "\n")
           })
-#' Title
+#' Show summary of an object of "Activity" class
 #'
 #' @param Activity
 #'
-#' @return
+#' @return The summary of an "Activity" object
 #'
 #'
 #' @examples
@@ -166,11 +166,11 @@ setMethod("show", "Activity",
                   "       All IDs: ", unique(object@mid), "\n")
           })
 
-#' Show content of an object of "EcoHABData" class
+#' Show summary of an object of "EcoHABData" class
 #'
 #' @param EcoHABData
 #'
-#' @return
+#' @return The summary of an "EcoHABData" object
 #'
 #'
 #' @examples
@@ -261,6 +261,8 @@ setMethod("setBinSize", "Timeline",
               end <- list()
               bin <- list()
               for(i in 1:length(obj@phase)) {
+                # divide each phase into bins according to binSize
+                # the last bin may be shorter than binSize
                 j <- ceiling((obj@end[i] - obj@start[i]) / binSize)
                 phase[[i]] <- paste(obj@phase[i], "div",
                                     sprintf(paste("%0", nchar(as.character(j)),
@@ -278,12 +280,11 @@ setMethod("setBinSize", "Timeline",
             return(obj)
           })
 
-#' Calculate events from given raw data, experimental layout and event threshold
+#' Calculate events from given raw data, experimental design and event threshold
 #'
 #' @param RawData Raw data to be calculated
-#' @param config A data frame describing structure of EcoHAB
+#' @param config A data frame describing the experimental design
 #' @param threshold Time threshold to detect same-antenna readings (in seconds)
-#' @importFrom stringi stri_reverse
 #'
 #' @return An object of class "Events".
 #'
@@ -307,13 +308,19 @@ setMethod("calcEvents", "RawData",
               loc_ls <- list()
               for(i in 1:nrow(obj@idList)) {
                 index <- which(obj@rfid == obj@idList$rfid[i])
-                # no need for further processing if no data
+                # no need for further processing if there're no data in obj
                 n <- length(index)
                 if(n == 0)
                   next
                 # transform consequential records into events
                 # initiate event list for individual mouse
-                start_i <- numeric(0)
+#                start_i <- numeric(0)
+#                end_i <- numeric(0)
+                # assign start time for each event
+                # when using transformed output, the start time should be delayed
+                # when using raw data, the start time is not delayed
+                # the first record serves as the end time of the first event
+                # the last record serves as the start time of the last event
                 if (obj@simplify) {
                   start_i <- obj@time[c(1, index)]+obj@delay[c(1, index)] / 1000
                   start_i[1] <- start_i[1] - obj@delay[1] / 1000
@@ -323,6 +330,7 @@ setMethod("calcEvents", "RawData",
                 start_i[1] <- start_i[1] - threshold
                 end_i <- obj@time[c(index, obj@size)]
                 end_i[n+1] <- end_i[n+1] + threshold
+                # assign the location for all events
                 from_i <- obj@antenna[c(index[1], index)]
                 to_i <- obj@antenna[c(index, index[n])]
                 length_i <- end_i - start_i
@@ -345,30 +353,11 @@ setMethod("calcEvents", "RawData",
                                       return(as.character(from))
                                   } else {
                                     return(locmap[from, to])
-                                    # if (config$cage[from] == config$cage[to])
-                                    #   return(config$cage[from])
-                                    # tube_from <- config$tube[from]
-                                    # tube_to <- config$tube[to]
-                                    # if (tube_from == stri_reverse(tube_to))
-                                    #   return(tube_from)
-                                    # else {
-                                    #   cage_from <- config$cage[which(config$tube %in%
-                                    #                                    c(tube_from,
-                                    #                                      stri_reverse(tube_from)))]
-                                    #   cage_to <- config$cage[which(config$tube %in%
-                                    #                                  c(tube_to,
-                                    #                                    stri_reverse(tube_to)))]
-                                    #   cage_co <- intersect(cage_from, cage_to)
-                                    #   if (length(cage_co) == 1)
-                                    #     return(cage_co)
-                                    #   else
-                                    #     return("err")
-                                    # }
                                   }
                                 },
                                 from_i, to_i, length_i)
                 if (obj@simplify) {
-                  # Include antenna events
+                  # Include antenna events between calculated events
                   end_i <- append(end_i, start_i[-1])
                   start_i <- append(start_i, obj@time[index])
                   ord_i <- order(start_i)
@@ -378,7 +367,7 @@ setMethod("calcEvents", "RawData",
                   to_i <- append(to_i, obj@antenna[index])[ord_i]
                   loc_i <- append(loc_i, as.character(obj@antenna[index]))[ord_i]
                 }
-                # Remove duplicate locations
+                # label duplicate locations as "NA" and remove them
                 j <- length(loc_i)
                 while (j > 1) {
                   if (loc_i[j] == loc_i[j-1] & from_i[j] == from_i[j-1] &
@@ -389,7 +378,6 @@ setMethod("calcEvents", "RawData",
                   }
                   j <- j - 1
                 }
-                # Remove invalid locations
                 valid <- which(!is.na(loc_i))
                 nv <- length(valid)
                 start_ls[[i]] <- start_i[valid]
@@ -401,6 +389,7 @@ setMethod("calcEvents", "RawData",
                 loc_ls[[i]] <- loc_i[valid]
                 events@size <- events@size + nv
               }
+              # combine events of all mice and order all events by start time
               events@start <- unlist(start_ls, use.names = FALSE)
               ord <- order(events@start)
               events@start <- events@start[ord]
@@ -415,11 +404,14 @@ setMethod("calcEvents", "RawData",
             return(events)
           })
 
-#' Title
+#' Calculate events from given raw data, experimental design and thresholds
 #'
-#' @param EcoHABData 
+#' @param EcoHABData The object to be calculated
+#' @param rec.threshold Time threshold to detect same-antenna readings (in seconds)
+#' @param follow.threshold Time threshold to detect following events (in seconds)
+#' @param mode A character string indicating the mode of following events
 #'
-#' @return
+#' @return An object of class "EcoHABData" in which events are calculated
 #' @export
 #'
 #' @examples
@@ -436,9 +428,77 @@ setMethod("calcEvents", "EcoHABData",
           })
 
 
+#' Remove some records by a given filter of loc, mid, or length
+#'
+#' @param Events The object to be filtered
+#' @param keep.loc A vector of locations to be kept
+#' @param keep.mid A vector of mice to be kept
+#' @param min.length The minimum length of events to be kept
+#' @param max.length The maximum length of events to be kept
+#' @param verbose A logic value indicating whether to show extra information
+#'
+#' @return An object of class "Events" with filtered records
+#'
+#'
+#' @examples
+setMethod("filter", "Events",
+          function(obj, keep.loc, keep.mid,
+                   min.length = 0, max.length = Inf, verbose = TRUE) {
+            if(obj@size == 0)
+              return(obj)
+            keep <- 1:obj@size
+            # Step wise filter out events
+            if(!missing(keep.loc))
+              keep <- keep[obj@loc[keep] %in% keep.loc]
+            else
+              keep.loc <- sort(unique(obj@loc))
+            if(!missing(keep.mid)) {
+              keep <- keep[obj@mid[keep] %in% keep.mid]
+              obj@idList <- subset(obj@idList, mid %in% keep.mid)
+            } else
+              keep.mid <- sort(unique(obj@mid))
+            if(min.length < 0) {
+              cat("Negative min length. Will set to default (0).\n")
+              min.length <- 0
+            }
+            if(max.length < 0) {
+              cat("Negative max length. Will set to default (Inf).\n")
+              max.length <- Inf
+            }
+            if(max.length < min.length) {
+              cat("Max length smaller than min. Will not remove events.\n")
+              min.length <- 0
+              max.length <- Inf
+            } else {
+              keep <- keep[obj@length[keep] >= min.length]
+              keep <- keep[obj@length[keep] <= max.length]
+            }
+            if(verbose) {
+              cat("Filtering events for animals", sort(keep.mid), "at locations",
+                  sort(keep.loc), "longer than", min.length,
+                  "second(s) and shorter than",
+                  max.length, "second(s) ...\n")
+              cat(obj@size, "events in total.\n")
+              cat(obj@size - length(keep), "events dropped.\n")
+            }
+            obj@start <- obj@start[keep]
+            obj@end <- obj@end[keep]
+            obj@rfid <- obj@rfid[keep]
+            obj@mid <- obj@mid[keep]
+            obj@from <- obj@from[keep]
+            obj@to <- obj@to[keep]
+            obj@length <- obj@length[keep]
+            obj@loc <- obj@loc[keep]
+            obj@size <- length(keep)
+            if (verbose)
+              cat(obj@size, "events remain.\n")
+            return(obj)
+          })
+
 #' Adjust tube passing events by adding waiting time at exit
 #'
-#' @param Events The object to be calculated 
+#' @param Events The object to be calculated
+#' @param config A data frame describing the experimental design
 #'
 #' @return An object of "Events" contain only adjusted tube events
 #'
@@ -534,68 +594,6 @@ setMethod("calcActivity", "Events",
             return(activity)
           })
 
-#' Remove some records by a given filter of loc, mid, or length
-#'
-#' @param Events
-#'
-#' @return An object of class "Events".
-#'
-#'
-#' @examples
-setMethod("filter", "Events",
-          function(obj, keep.loc, keep.mid,
-                   min.length = 0, max.length = Inf, verbose = TRUE) {
-            if(obj@size == 0)
-              return(obj)
-            keep <- 1:obj@size
-            # Step wise filter out events
-            if(!missing(keep.loc))
-              keep <- keep[obj@loc[keep] %in% keep.loc]
-            else
-              keep.loc <- sort(unique(obj@loc))
-            if(!missing(keep.mid)) {
-              keep <- keep[obj@mid[keep] %in% keep.mid]
-              obj@idList <- subset(obj@idList, mid %in% keep.mid)
-            } else
-              keep.mid <- sort(unique(obj@mid))
-            if(min.length < 0) {
-              cat("Negative min length. Will set to default (0).\n")
-              min.length <- 0
-            }
-            if(max.length < 0) {
-              cat("Negative max length. Will set to default (Inf).\n")
-              max.length <- Inf
-            }
-            if(max.length < min.length) {
-              cat("Max length smaller than min. Will not remove events.\n")
-              min.length <- 0
-              max.length <- Inf
-            } else {
-              keep <- keep[obj@length[keep] >= min.length]
-              keep <- keep[obj@length[keep] <= max.length]
-            }
-            if(verbose) {
-              cat("Filtering events for animals", sort(keep.mid), "at locations",
-                  sort(keep.loc), "longer than", min.length,
-                  "second(s) and shorter than",
-                  max.length, "second(s) ...\n")
-              cat(obj@size, "events in total.\n")
-              cat(obj@size - length(keep), "events dropped.\n")
-            }
-            obj@start <- obj@start[keep]
-            obj@end <- obj@end[keep]
-            obj@rfid <- obj@rfid[keep]
-            obj@mid <- obj@mid[keep]
-            obj@from <- obj@from[keep]
-            obj@to <- obj@to[keep]
-            obj@length <- obj@length[keep]
-            obj@loc <- obj@loc[keep]
-            obj@size <- length(keep)
-            if (verbose)
-              cat(obj@size, "events remain.\n")
-            return(obj)
-          })
-
 #' Calculate mouse activity in given time bins
 #' @description Calculate activity from events given by the input object of class "EcoHABData" and return it.
 #' @param EcoHABData The object to be calculated
@@ -638,11 +636,12 @@ setMethod("calcActivity", "EcoHABData",
             return(obj)
           })
 
-#' Title
+#' Calculate events that a given mouse spends time alone in each location (single events)
 #'
-#' @param Events
+#' @param Events The object to be calculated
+#' @param uloc A vector of locations to be calculated
 #'
-#' @return
+#' @return An object of class "Events" contain only single events
 #'
 #'
 #' @examples
@@ -728,11 +727,12 @@ setMethod("calcSingleEvents", "Events",
             return(singleEvents)
           })
 
-#' Title
+#' Calculate events that a given pair of mice spends time in the same location (in-cohort events)
 #'
-#' @param Events
+#' @param Events The object to be calculated
+#' @param uloc A vector of locations to be calculated
 #'
-#' @return
+#' @return An object of class "Events" contain only in-cohort events
 #'
 #'
 #' @examples
@@ -824,11 +824,14 @@ setMethod("calcIncohortEvents", "Events",
             return(pairedEvents)
           })
 
-#' Title
+#' Calculate events that one mouse follows another in the same tube (follow events)
 #'
-#' @param Events
+#' @param Events The object to be calculated
+#' @param uloc A vector of locations to be calculated
+#' @param mode A character string indicating the mode of following events
+#' @param threshold Time threshold to detect following events (in seconds)
 #'
-#' @return
+#' @return An object of class "Events" contain only follow events
 #'
 #'
 #' @examples
@@ -946,11 +949,11 @@ setMethod("calcFollowEvents", "Events",
             return(followEvents)
           })
 
-#' Title
+#' Calculate the chance level for in-cohort events
 #'
-#' @param Activity
+#' @param Activity The object to be calculated
 #'
-#' @return
+#' @return A vector of chance level "sociability"
 #'
 #'
 #' @examples
@@ -973,11 +976,12 @@ setMethod("calcCoincidence", "Activity",
             return(unlist(expected))
           })
 
-#' Title
+#' Adjust in-cohort sociability by subtracting the chance level
 #'
-#' @param Activity
+#' @param paired An object of "Activity" containing in-cohort events
+#' @param single An object of "Activity" containing independent cage events
 #'
-#' @return
+#' @return An object of "Activity" with adjusted sociability (in-cohort ratios)
 #'
 #'
 #' @examples
@@ -988,11 +992,12 @@ setMethod("adjustSociability", "Activity",
             return(paired)
           })
 
-#' Title
+#' Adjust following counts by normalizing to total tube crossing counts
 #'
-#' @param Activity
+#' @param following An object of "Activity" containing following events
+#' @param single An object of "Activity" containing independent tube events
 #'
-#' @return
+#' @return An object of "Activity" with adjusted following counts (following ratios)
 #'
 #'
 #' @examples
@@ -1009,11 +1014,11 @@ setMethod("adjustFollowing", "Activity",
             return(following)
           })
 
-#' Title
+#' Get a data frame of events from a given "Events" object
 #'
-#' @param Events
+#' @param Events The object to be calculated
 #'
-#' @return  A data frame of events by given index.
+#' @return  A data frame of all events in this object
 #'
 #'
 #' @examples
@@ -1026,11 +1031,11 @@ setMethod("getEvents", "Events",
                        length = round(obj@length, 3), loc = obj@loc)
           })
 
-#' Title
+#' Get a data frame of independent events from a given "EcoHABData" object
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #'
-#' @return A data frame of events by given index.
+#' @return A data frame of events by given index
 #' @export
 #'
 #' @examples
@@ -1043,11 +1048,11 @@ setMethod("getEvents", "EcoHABData",
             getEvents(obj@events[index])
           })
 
-#' Title
+#' Get the number of events from a given "Activity" object
 #'
-#' @param Activity
+#' @param Activity The object to be calculated
 #'
-#' @return A data frame of visits to each location.
+#' @return A data frame of visits to each location
 #'
 #'
 #' @examples
@@ -1061,11 +1066,44 @@ setMethod("getVisits", "Activity",
             cbind(df, df_visits)
           })
 
+#' Get the time from a given "Activity" object
+#'
+#' @param Activity The object to be calculated
+#'
+#' @return A data frame of time in each location
+#'
+#'
+#' @examples
+setMethod("getDurations", "Activity",
+          function(obj) {
+            df <- data.frame(phase = obj@phase, binSize = obj@binSize,
+                             rfid = obj@rfid, mid = obj@mid)
+            df_time <- data.frame(obj@time)
+            if(length(obj@uloc) > 0)
+              colnames(df_time) <- paste("time", obj@uloc, sep = "_")
+            cbind(df, df_time)
+          })
+
+#' Get the ratio of time from a given "Activity" object
+#'
+#' @param Activity The object to be calculated
+#'
+#' @return A data frame of ratio of time in each cage
+#'
+#'
+#' @examples
+setMethod("getRatios", "Activity",
+          function(obj) {
+            data.frame(phase = obj@phase, binSize = obj@binSize,
+                       rfid = obj@rfid, mid = obj@mid, ratio = obj@ratio)
+          })
+
 #' Get the number of visits to each tube
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
-#' @return A data frame of visits to each tube.
+#' @return A data frame of visits to each tube
 #' @export
 #'
 #' @examples
@@ -1081,8 +1119,9 @@ setMethod("getTubeVisits", "EcoHABData",
 #' Get the number of visits to each cage
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
-#' @return A data frame of visits to each cage.
+#' @return A data frame of visits to each cage
 #' @export
 #'
 #' @examples
@@ -1095,27 +1134,10 @@ setMethod("getCageVisits", "EcoHABData",
             getVisits(obj@cage.visit[index])
           })
 
-#' Title
-#'
-#' @param Activity
-#'
-#' @return A data frame of time in each location.
-#'
-#'
-#' @examples
-setMethod("getDurations", "Activity",
-          function(obj) {
-            df <- data.frame(phase = obj@phase, binSize = obj@binSize,
-                             rfid = obj@rfid, mid = obj@mid)
-            df_time <- data.frame(obj@time)
-            if(length(obj@uloc) > 0)
-              colnames(df_time) <- paste("time", obj@uloc, sep = "_")
-            cbind(df, df_time)
-          })
-
 #' Get the time in each cage
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
 #' @return A data frame of time in each cage.
 #' @export
@@ -1130,25 +1152,12 @@ setMethod("getCageDurations", "EcoHABData",
             getDurations(obj@cage.visit[index])
           })
 
-#' Title
-#'
-#' @param Activity
-#'
-#' @return A data frame of ratio of time in all cages.
-#'
-#'
-#' @examples
-setMethod("getRatios", "Activity",
-          function(obj) {
-            data.frame(phase = obj@phase, binSize = obj@binSize,
-                       rfid = obj@rfid, mid = obj@mid, ratio = obj@ratio)
-          })
-
 #' Get the sociability index
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
-#' @return A data frame of ratio of time in all cages.
+#' @return A data frame of in-cohort sociability indices in each cage
 #' @export
 #'
 #' @examples
@@ -1164,8 +1173,9 @@ setMethod("getSociability", "EcoHABData",
 #' Get the solitude index
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
-#' @return A data frame of ratio of time in all cages.
+#' @return A data frame of solitude indices in each cage
 #' @export
 #'
 #' @examples
@@ -1181,8 +1191,9 @@ setMethod("getSolitude", "EcoHABData",
 #' Get the number of leading-following events in each tube
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
-#' @return A data frame of leading-following in each tube.
+#' @return A data frame of following counts in each tube
 #' @export
 #'
 #' @examples
@@ -1198,8 +1209,9 @@ setMethod("getFollowingCounts", "EcoHABData",
 #' Get the following index
 #'
 #' @param EcoHABData
+#' @param index A vector of indices to be exported
 #'
-#' @return A data frame of following index in all tubes.
+#' @return A data frame of following index in each tube
 #' @export
 #'
 #' @examples
