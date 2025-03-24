@@ -1,7 +1,7 @@
 Package: ecohabr
 Type: Package
 Title: EcoHAB data analysis
-Version: 1.1.2
+Version: 1.1.3
 Author: Xiang Zhao
 Maintainer: Xiang Zhao <xzhao@cshl.edu>
 Description: This package is used for process raw datda from EcoHAB system.
