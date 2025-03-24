@@ -19,11 +19,22 @@ setMethod("initialize", "RawData",
             delay <- list()
             if(!is.null(idFile) & !is.null(rawDir)) {
               idList <-  read.delim(idFile)
+              # determine which partial rfid(s) can be fixed
+              pid <- substr(idList$rfid, 3, 10)
+              fix <- !duplicated(pid) & !duplicated(pid, fromLast = TRUE)
+              # enumerate all raw data files
               rawFiles <- file.path(rawDir, dir(rawDir, pattern = "0000.txt"), fsep = "\\")
               i <- 1L
+              # read recording files and fix partial records
               if (simplify) {
                 for (file in rawFiles) {
                   data <- fread(file, sep = "\t", header = FALSE)
+                  err <- which(!data[, 6] %in% idList$rfid)
+                  partial <- substr(data[err, 6], 1, 8)
+                  fixable <- partial %in% pid[fix]
+                  fixed <- idList$rfid[fix][match(partial[fixable], pid[fix])]
+                  data[err[fixable], 6] <- fixed
+                  cat(length(fixed), "records fixed in file", file, "\n")
                   time[[i]] <- paste(data[, 2], data[, 3], sep = "_")
                   rfid[[i]] <- data[, 6]
                   antenna[[i]] <- data[, 4]
@@ -33,6 +44,12 @@ setMethod("initialize", "RawData",
               } else {
                 for (file in rawFiles) {
                   data <- fread(file, sep = "\t", header = FALSE)
+                  err <- which(!data[, 2] %in% idList$rfid)
+                  partial <- substr(data[err, 2], 1, 8)
+                  fixable <- partial %in% pid[fix]
+                  fixed <- idList$rfid[fix][match(partial[fixable], pid[fix])]
+                  data[err[fixable], 2] <- fixed
+                  cat(length(fixed), "records fixed in file", file, "\n")
                   time[[i]] <- data[, 1]
                   rfid[[i]] <- data[, 2]
                   antenna[[i]] <- data[, 3]
@@ -105,12 +122,14 @@ setMethod("initialize", "Timeline",
 #'
 setMethod("initialize", "EcoHABData",
           function(.Object, rawDir = NULL, idFile = NULL, timeFile = NULL,
-                   config = NULL, simplify = FALSE) {
-            if (is.null(config)) {
+                   config = NULL, simplify = FALSE, rec.threshold = 2) {
+            .Object@config <- config
+            if(is.null(config)) {
               .Object@config <- defaultConfig
             }
             .Object@raw <- new("RawData", rawDir, idFile, simplify)
             .Object@timeline <- new("Timeline", timeFile)
+            .Object@events <- calcEvents(.Object@raw, .Object@config, rec.threshold)
             return(.Object)
           })
 
@@ -314,8 +333,6 @@ setMethod("calcEvents", "RawData",
                   next
                 # transform consequential records into events
                 # initiate event list for individual mouse
-#                start_i <- numeric(0)
-#                end_i <- numeric(0)
                 # assign start time for each event
                 # when using transformed output, the start time should be delayed
                 # when using raw data, the start time is not delayed
@@ -404,7 +421,7 @@ setMethod("calcEvents", "RawData",
             return(events)
           })
 
-#' Calculate events from given raw data, experimental design and thresholds
+#' Calculate social activity from individual events, experimental design and thresholds
 #'
 #' @param EcoHABData The object to be calculated
 #' @param rec.threshold Time threshold to detect same-antenna readings (in seconds)
@@ -416,9 +433,8 @@ setMethod("calcEvents", "RawData",
 #'
 #' @examples
 setMethod("calcEvents", "EcoHABData",
-          function(obj, rec.threshold = 2, follow.threshold = 2,
+          function(obj, follow.threshold = 2,
                    mode = c("in_place", "delay")) {
-            obj@events <- calcEvents(obj@raw, obj@config, rec.threshold)
             obj@incohort <- calcIncohortEvents(obj@events, unique(obj@config$cage))
             obj@solo <- calcSingleEvents(obj@events, unique(obj@config$cage))
             obj@inter <- calcFollowEvents(adjustTubeEvents(obj@events),
@@ -1078,7 +1094,7 @@ setMethod("getDurations", "Activity",
           function(obj) {
             df <- data.frame(phase = obj@phase, binSize = obj@binSize,
                              rfid = obj@rfid, mid = obj@mid)
-            df_time <- data.frame(obj@time)
+            df_time <- data.frame(round(obj@time, 3))
             if(length(obj@uloc) > 0)
               colnames(df_time) <- paste("time", obj@uloc, sep = "_")
             cbind(df, df_time)
@@ -1100,7 +1116,7 @@ setMethod("getRatios", "Activity",
 
 #' Get the number of visits to each tube
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of visits to each tube
@@ -1118,7 +1134,7 @@ setMethod("getTubeVisits", "EcoHABData",
 
 #' Get the number of visits to each cage
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of visits to each cage
@@ -1136,7 +1152,7 @@ setMethod("getCageVisits", "EcoHABData",
 
 #' Get the time in each cage
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of time in each cage.
@@ -1154,7 +1170,7 @@ setMethod("getCageDurations", "EcoHABData",
 
 #' Get the sociability index
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of in-cohort sociability indices in each cage
@@ -1172,7 +1188,7 @@ setMethod("getSociability", "EcoHABData",
 
 #' Get the solitude index
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of solitude indices in each cage
@@ -1190,7 +1206,7 @@ setMethod("getSolitude", "EcoHABData",
 
 #' Get the number of leading-following events in each tube
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of following counts in each tube
@@ -1208,7 +1224,7 @@ setMethod("getFollowingCounts", "EcoHABData",
 
 #' Get the following index
 #'
-#' @param EcoHABData
+#' @param EcoHABData The object to be calculated
 #' @param index A vector of indices to be exported
 #'
 #' @return A data frame of following index in each tube
